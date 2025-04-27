@@ -44,6 +44,13 @@ def handler(event, context):
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'registryUrl': url})
             }
+        else:
+            # Handle unrecognized paths
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'error': f'Unsupported path: {path}'})
+            }
             
     except Exception as e:
         logger.error(f"Error: {str(e)}")

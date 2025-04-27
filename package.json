@@ -9,7 +9,7 @@
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
-    "wscat":"wscat -c wss://f8nllkhd8i.execute-api.us-east-1.amazonaws.com/prod"
+    "wscat": "wscat -c $WEBSOCKET_URI || echo 'Error: WEBSOCKET_URI environment variable not set'"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
