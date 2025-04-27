@@ -6,6 +6,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as apigatewayv2 from '@aws-cdk/aws-apigatewayv2-alpha';
 import * as apigatewayv2_integrations from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
+import * as path from 'path';
 
 export class TestTrainingStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -61,10 +62,12 @@ export class TestTrainingStack extends cdk.Stack {
     weightsBucket.grantReadWrite(sagemakerRole);
     modelRegistry.grantPullPush(sagemakerRole);
 
-    // Lambda Functions
+    // Lambda Functions (using TypeScript)
     const uploadHandler = new lambda.Function(this, 'UploadHandler', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      code: lambda.Code.fromAsset('lambda'),
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-ts/dist'), {
+        exclude: ['*', '!upload.js']
+      }),
       handler: 'upload.handler',
       environment: {
         TRAINING_BUCKET: trainingDataBucket.bucketName,
@@ -76,8 +79,10 @@ export class TestTrainingStack extends cdk.Stack {
     });
 
     const downloadHandler = new lambda.Function(this, 'DownloadHandler', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      code: lambda.Code.fromAsset('lambda'),
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-ts/dist'), {
+        exclude: ['*', '!download.js']
+      }),
       handler: 'download.handler',
       environment: {
         WEIGHTS_BUCKET: weightsBucket.bucketName,
@@ -119,9 +124,11 @@ export class TestTrainingStack extends cdk.Stack {
     };
 
     const trainingHandler = new lambda.Function(this, 'TrainingJobAPIHandler', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      code: lambda.Code.fromAsset('lambda'),
-      handler: 'training_api.handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-ts/dist'), {
+        exclude: ['*', '!training.js']
+      }),
+      handler: 'training.handler',
       environment: {
         TRAINING_CONFIG: JSON.stringify(trainingJobConfig)
       },
@@ -131,8 +138,10 @@ export class TestTrainingStack extends cdk.Stack {
     });
 
     const audioHandler = new lambda.Function(this, 'AudioHandler', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      code: lambda.Code.fromAsset('lambda'),
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-ts/dist'), {
+        exclude: ['*', '!audio.js']
+      }),
       handler: 'audio.handler',
       environment: {
         TRAINING_BUCKET: trainingDataBucket.bucketName

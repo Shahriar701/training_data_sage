@@ -1,0 +1,32 @@
+{
+  "name": "lambda-ts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "build:upload": "esbuild src/upload.ts --bundle --platform=node --target=node18 --outfile=dist/upload.js",
+    "build:download": "esbuild src/download.ts --bundle --platform=node --target=node18 --outfile=dist/download.js",
+    "build:training": "esbuild src/training.ts --bundle --platform=node --target=node18 --outfile=dist/training.js",
+    "build:audio": "esbuild src/audio.ts --bundle --platform=node --target=node18 --outfile=dist/audio.js",
+    "build:all": "npm run build:upload && npm run build:download && npm run build:training && npm run build:audio",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.134",
+    "@types/node": "^20.12.12",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.532.0",
+    "@aws-sdk/client-ecr": "^3.532.0",
+    "@aws-sdk/client-s3": "^3.532.0",
+    "@aws-sdk/client-sagemaker": "^3.532.0",
+    "@aws-sdk/s3-request-presigner": "^3.532.0"
+  }
+}

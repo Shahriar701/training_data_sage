@@ -197,72 +197,133 @@ curl -X POST "${API_ENDPOINT}/photos?filename=test-image.jpg"
 
 # Test weights upload URL generation
 curl -X POST "${API_ENDPOINT}/weights?filename=model.h5"
-
-# Test weights download URL generation
-curl -X GET "${API_ENDPOINT}/weights?filename=model.h5"
-
-# Test ECR repository info
-curl -X GET "${API_ENDPOINT}/models"
-
-# Test training job creation
-curl -X POST "${API_ENDPOINT}/training"
-```
-
-### WebSocket Testing
-
-Use the provided test script:
-
-```bash
-# Set the WebSocket URI (from CDK output)
-export WEBSOCKET_URI="wss://your-api-id.execute-api.region.amazonaws.com/prod"
-
-# Run the test script
-python test_websocket.py
-
-# Or with a specific URI
-python test_websocket.py --uri "wss://your-api-id.execute-api.region.amazonaws.com/prod"
-```
-
-Alternatively, use wscat:
-
-```bash
-# Use the npm script
-npm run wscat
-
-# Or directly
-wscat -c "wss://your-api-id.execute-api.region.amazonaws.com/prod"
-```
-
-Once connected, send a test message:
-```json
-{"audio": "SGVsbG8gV29ybGQ="}
-```
-
-### Security Testing
-
-Test input validation and error handling:
-
-```bash
-# Test invalid filenames (should return 400 errors)
-curl -X POST "${API_ENDPOINT}/photos?filename=../etc/passwd"
-curl -X POST "${API_ENDPOINT}/photos?filename=.hidden-file"
-
-# Test missing parameters
-curl -X POST "${API_ENDPOINT}/photos"
-
-# Test invalid endpoints
-curl -X GET "${API_ENDPOINT}/invalid"
 ```
 
 ### End-to-End Testing
 
-For comprehensive testing, create a shell script that:
+The following steps demonstrate how to test the complete workflow:
 
-1. Generates upload URLs for photos and weights
-2. Uploads actual files using the presigned URLs
-3. Verifies the files exist in S3
-4. Initiates a training job
-5. Tests the WebSocket connection with audio data
+#### 1. Build and Push the Model Docker Image
+
+```bash
+# Build the Docker image
+docker build -t test-models ./model/
+
+# Tag and push to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.us-east-1.amazonaws.com
+docker tag test-models:latest <your-account-id>.dkr.ecr.us-east-1.amazonaws.com/test-models:latest
+docker push <your-account-id>.dkr.ecr.us-east-1.amazonaws.com/test-models:latest
+
+# Verify the image was pushed
+aws ecr describe-images --repository-name test-models
+```
+
+#### 2. Upload Training Data
+
+The upload process involves two steps: getting a presigned URL and then using it to upload data:
+
+```bash
+# Create a dummy test image
+echo "This is dummy image data" > dummy_image.jpg
+
+# Get a presigned URL using the API (either with your script or curl)
+curl -X POST "${API_ENDPOINT}/photos?filename=dummy_image.jpg"
+
+# Use the presigned URL to upload the file (you'll need a script or tool like curl)
+# Replace the URL below with the one from the previous response
+curl -X PUT -H "Content-Type: image/jpeg" --data-binary @dummy_image.jpg "https://your-s3-presigned-url"
+
+# Verify the upload
+aws s3 ls s3://<your-training-bucket>/photos/
+```
+
+#### 3. Start a SageMaker Training Job
+
+```bash
+# Call the training endpoint to start a job
+curl -X POST "${API_ENDPOINT}/training"
+
+# Check the job status (replace job-name with the name from the response)
+aws sagemaker describe-training-job --training-job-name <job-name>
+```
+
+#### 4. Monitoring Your SageMaker Training Job
+
+**Using AWS CLI:**
+```bash
+# Check the status of the training job
+aws sagemaker describe-training-job --training-job-name <job-name>
+
+# List all your training jobs
+aws sagemaker list-training-jobs
+
+# Get the latest training jobs
+aws sagemaker list-training-jobs --sort-by CreationTime --sort-order Descending --max-results 5
+```
+
+**Using AWS Console:**
+
+1. Go to the AWS Management Console (https://console.aws.amazon.com)
+2. Search for "SageMaker" and click on the service
+3. In the left navigation panel, expand "Training"
+4. Click on "Training jobs"
+5. Your training job will be listed - click on it to see details
+
+**Job Status Flow:**
+- **Starting**: Provisioning instances and preparing environment
+- **Downloading**: Downloading training data from S3
+- **Training**: Running your model training code
+- **Uploading**: Uploading trained model artifacts to S3
+- **Completed/Failed**: Final status
+
+**View Logs:**
+In the job details page, click "View logs" to see training output in CloudWatch.
+
+**Output Data:**
+When the job completes, trained model artifacts will be available in the S3 output path.
+
+#### 5. Testing WebSocket Audio API
+
+```bash
+# Install wscat if needed
+npm install -g wscat
+
+# Connect to the WebSocket endpoint (replace with your endpoint)
+wscat -c "wss://your-api-id.execute-api.region.amazonaws.com/prod"
+
+# Once connected, send a test message
+# In the wscat terminal, enter:
+{"audio": "SGVsbG8gV29ybGQ="}
+
+# Verify the audio was stored
+aws s3 ls s3://<your-training-bucket>/audio/
+```
+
+### Architecture Flow
+
+1. **Data Upload Flow**:
+   - Client calls REST API to get presigned URL
+   - Client uploads data directly to S3 using the presigned URL
+   - Data is stored in the training bucket
+
+2. **Training Flow**:
+   - Client calls training endpoint
+   - Lambda function configures and starts SageMaker training job
+   - SageMaker pulls Docker image from ECR
+   - SageMaker provisions instances and runs training
+   - Trained model is saved to the weights bucket
+
+3. **Audio Processing Flow**:
+   - Client connects to WebSocket API
+   - Client sends audio data through WebSocket
+   - Lambda processes and validates audio
+   - Audio is stored in the training bucket
+   - Success/failure response sent back through WebSocket
+
+4. **Model Download Flow**:
+   - Client calls download endpoint with filename
+   - Lambda generates presigned URL for the file
+   - Client downloads file directly from S3
 
 ## Troubleshooting
 
