@@ -1,186 +1,124 @@
-# ML Training Infrastructure Project
+# ML Training Infrastructure
 
-This project sets up an AWS infrastructure for machine learning model training, providing REST APIs for data upload, model training, and weight management, as well as a WebSocket API for streaming audio data.
+A serverless infrastructure for collecting training data, managing models, and running SageMaker training jobs.
 
-## Table of Contents
-1. [Architecture](#architecture)
-2. [Security Features](#security-features)
-3. [Prerequisites](#prerequisites)
-4. [Deployment Guide](#deployment-guide)
-5. [Configuration](#configuration)
-6. [API Reference](#api-reference)
-7. [Testing Guide](#testing-guide)
-8. [Troubleshooting](#troubleshooting)
-9. [Development Guide](#development-guide)
-10. [Common Commands](#common-commands)
+## Architecture Overview
 
-## Architecture
-
-This project creates the following AWS resources using the AWS CDK:
-
-- **Storage**:
-  - S3 bucket for training data (photos, audio)
-  - S3 bucket for model weights and outputs
-  - ECR repository for containerized ML models
-
-- **Compute & Training**:
-  - Lambda functions for API handling
-  - SageMaker training job configuration
-
-- **API Endpoints**:
-  - REST API Gateway for data management
-  - WebSocket API for real-time audio streaming
-
-- **Security**:
-  - IAM roles with least privilege
-  - S3 bucket encryption
-  - API request validation
-
-## Security Features
-
-This project implements the following security best practices:
-
-- **Input Validation**:
-  - Filename validation to prevent path traversal
-  - JSON payload validation
-  - Audio data format validation
-
-- **Access Control**:
-  - Configurable CORS settings
-  - Fine-grained IAM permissions
-  - Proper error handling with sanitized responses
-
-- **Data Protection**:
-  - S3 server-side encryption
-  - Secure presigned URLs for uploads/downloads
-  - ECR image scanning on push
-
-## Prerequisites
-
-Before you deploy this project, ensure you have:
-
-1. AWS CLI installed and configured with appropriate credentials
-2. Node.js 14+ and npm installed
-3. AWS CDK installed globally (`npm install -g aws-cdk`)
-4. Python 3.9+ for Lambda functions and testing
-5. Docker for local testing (optional)
-
-## Deployment Guide
-
-### First-time Setup
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd <repository-directory>
-
-# Install dependencies
-npm install
-
-# Bootstrap the CDK (first-time only)
-cdk bootstrap
-
-# Set configuration environment variables
-export ALLOWED_ORIGIN="https://your-app-domain.com"
-export ALLOWED_ORIGINS="https://app1.example.com,https://app2.example.com"
-
-# Deploy the stack
-cdk deploy
+```
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│               │     │               │     │               │
+│   Client      │────▶│  API Gateway  │────▶│  Lambda       │
+│   Application │     │  REST/WebSocket│     │  Functions    │
+│               │     │               │     │               │
+└───────────────┘     └───────────────┘     └───────┬───────┘
+                                                    │
+                                                    ▼
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│               │     │               │     │               │
+│  SageMaker    │◀───▶│   ECR         │     │   S3 Buckets  │
+│  Training Jobs│     │   Repository  │     │   Storage     │
+│               │     │               │     │               │
+└───────────────┘     └───────────────┘     └───────────────┘
 ```
 
-### Updating an Existing Deployment
+### Components
 
-```bash
-# Pull the latest changes
-git pull
+- **Client Applications** - Web or mobile apps that collect training data and interact with the infrastructure
+- **API Gateway** - REST and WebSocket interfaces for client interactions
+- **Lambda Functions** - Serverless compute for handling requests (upload, download, training, audio)
+- **S3 Buckets** - Storage for training data, audio files, and model weights
+- **ECR Repository** - Container registry for training algorithms
+- **SageMaker** - ML training service for running training jobs
 
-# Install any new dependencies
-npm install
+## Clean Architecture Design
 
-# Deploy updates
-cdk deploy
+The Lambda functions follow Clean Architecture principles, organized in layers:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Controllers (Lambda Handlers)                            │
+│                                                          │
+│  ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌───────┐ │
+│  │ Upload   │  │ Download   │  │ Training   │  │ Audio │ │
+│  └────┬─────┘  └─────┬──────┘  └─────┬──────┘  └───┬───┘ │
+└──────┼──────────────┼───────────────┼────────────┼──────┘
+       │              │               │            │
+       ▼              ▼               ▼            ▼
+┌──────────────────────────────────────────────────────────┐
+│ Use Cases                                                │
+│                                                          │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐  ┌─────┐│
+│  │ UploadFile │  │DownloadFile│  │CreateTraining│  │Audio││
+│  └────┬───────┘  └─────┬──────┘  └─────┬───────┘  └──┬──┘│
+└──────┼──────────────┼───────────────┼───────────────┼───┘
+       │              │               │               │
+       ▼              ▼               ▼               ▼
+┌──────────────────────────────────────────────────────────┐
+│ Domain                                                    │
+│                                                          │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐  ┌─────┐│
+│  │ Entities   │  │Repositories│  │  Services   │  │Types ││
+│  └────────────┘  └────────────┘  └─────────────┘  └─────┘│
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Cleanup
+### Design Patterns Implemented
 
-To remove all resources created by this project:
+1. **Repository Pattern**
+   - **Purpose**: Abstracts data access logic from business logic
+   - **Implementation**: `IFileRepository`, `IAudioRepository`, etc. with S3 implementations
+   - **Benefit**: Allows swapping storage implementations without changing business logic
+   
+2. **Dependency Injection**
+   - **Purpose**: Reduces coupling between components
+   - **Implementation**: Dependencies passed via constructors (e.g., repositories to use cases)
+   - **Benefit**: Makes testing easier by allowing mock implementations
 
-```bash
-cdk destroy
+3. **Factory Method Pattern**
+   - **Purpose**: Encapsulates complex object creation
+   - **Implementation**: `createUploadService()`, `createAudioProcessor()`, etc.
+   - **Benefit**: Centralizes creation logic and handles dependencies
+
+4. **Strategy Pattern**
+   - **Purpose**: Enables selecting algorithms at runtime
+   - **Implementation**: Repository interfaces allow swapping implementations
+   - **Benefit**: Flexibility to change implementation details without affecting higher layers
+
+## Data Flow
+
+### 1. Data Upload Flow
 ```
-
-## Configuration
-
-### Environment Variables
-
-Configure the deployment with these environment variables:
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `ALLOWED_ORIGIN` | Origin allowed for S3 CORS | https://example.com | No |
-| `ALLOWED_ORIGINS` | Comma-separated list of origins for API Gateway CORS | https://example.com | No |
-| `WEBSOCKET_URI` | WebSocket endpoint for testing | None | For testing only |
-
-### CDK Context
-
-Advanced configuration can be set in cdk.json context.
-
-## API Reference
-
-### REST API Endpoints
-
-#### Upload API
-- **POST /photos?filename={filename}**
-  - Generate a presigned URL for uploading training photos
-  - Required query params: `filename` (alphanumeric, `.`, `-`, `_` only)
-  - Response: `{ "uploadUrl": "https://..." }`
-
-- **POST /weights?filename={filename}**
-  - Generate a presigned URL for uploading model weights
-  - Required query params: `filename` (alphanumeric, `.`, `-`, `_` only)
-  - Response: `{ "uploadUrl": "https://..." }`
-
-#### Download API
-- **GET /weights?filename={filename}**
-  - Generate a presigned URL for downloading model weights
-  - Required query params: `filename`
-  - Response: `{ "downloadUrl": "https://..." }`
-
-- **GET /models**
-  - Get ECR repository information
-  - Response: `{ "registryUrl": "https://..." }`
-
-#### Training API
-- **POST /training**
-  - Start a SageMaker training job
-  - Response: `{ "TrainingJobArn": "arn:aws:...", "TrainingJobName": "..." }`
-
-### WebSocket API
-
-Connect to the WebSocket endpoint from the CDK output.
-
-**Send a message**:
-```json
-{
-  "audio": "<base64-encoded-audio-data>"
-}
+Client → API Gateway → Upload Lambda → S3 Bucket (photos/)
 ```
+- Client calls REST API to get presigned URL
+- Client uploads directly to S3 using the presigned URL
+- Data stored in training bucket
 
-**Success response**:
-```json
-{
-  "status": "success",
-  "file": "audio/connection-id/timestamp.wav"
-}
+### 2. Audio Processing Flow
 ```
+Client → WebSocket API → Audio Lambda → S3 Bucket (audio/)
+```
+- Client connects to WebSocket API
+- Client streams audio data
+- Audio Lambda validates and stores audio files
 
-**Error response**:
-```json
-{
-  "status": "error",
-  "message": "Error message details"
-}
+### 3. Training Flow
 ```
+Client → API Gateway → Training Lambda → SageMaker → ECR → S3 (weights/)
+```
+- Client calls training endpoint
+- Lambda configures and starts SageMaker training job
+- SageMaker pulls container from ECR
+- SageMaker reads training data from S3
+- Trained model saved back to S3
+
+### 4. Model Download Flow
+```
+Client → API Gateway → Download Lambda → S3 Bucket (weights/)
+```
+- Client requests download URL
+- Lambda generates presigned URL
+- Client downloads model weights
 
 ## Testing Guide
 
@@ -299,106 +237,17 @@ wscat -c "wss://your-api-id.execute-api.region.amazonaws.com/prod"
 aws s3 ls s3://<your-training-bucket>/audio/
 ```
 
-### Architecture Flow
-
-1. **Data Upload Flow**:
-   - Client calls REST API to get presigned URL
-   - Client uploads data directly to S3 using the presigned URL
-   - Data is stored in the training bucket
-
-2. **Training Flow**:
-   - Client calls training endpoint
-   - Lambda function configures and starts SageMaker training job
-   - SageMaker pulls Docker image from ECR
-   - SageMaker provisions instances and runs training
-   - Trained model is saved to the weights bucket
-
-3. **Audio Processing Flow**:
-   - Client connects to WebSocket API
-   - Client sends audio data through WebSocket
-   - Lambda processes and validates audio
-   - Audio is stored in the training bucket
-   - Success/failure response sent back through WebSocket
-
-4. **Model Download Flow**:
-   - Client calls download endpoint with filename
-   - Lambda generates presigned URL for the file
-   - Client downloads file directly from S3
-
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Deployment Failures**
-   - Check the CloudFormation stack events in AWS Console
-   - Ensure your AWS account has necessary permissions
-   - Verify the CDK is bootstrapped in your account/region
+1. **Presigned URL Expiration**: Presigned URLs expire after the specified time (default 15 minutes). Generate a new URL if you encounter expiration errors.
 
-2. **API Errors**
-   - Check CloudWatch logs for the specific Lambda function
-   - Verify IAM permissions for the Lambda roles
-   - Test API Gateway directly in the AWS Console
+2. **CORS Issues**: If accessing from a browser, ensure the CORS settings on the API Gateway and S3 buckets match your application's origin.
 
-3. **WebSocket Connection Issues**
-   - Verify the WebSocket URL is correct
-   - Check network connectivity and firewall settings
-   - Review the WebSocket route configuration in API Gateway
+3. **Permission Errors**: Check that Lambda execution roles have appropriate permissions for S3, ECR, and SageMaker operations.
 
-4. **Lambda Timeouts**
-   - If operations are timing out, increase the timeout in the stack
-   - Consider optimizing the Lambda functions
-
-### Viewing Logs
-
-```bash
-# View logs for a specific Lambda function
-aws logs get-log-events --log-group-name /aws/lambda/StackName-FunctionName --limit 100
-
-# Watch logs in real-time
-aws logs tail /aws/lambda/StackName-FunctionName --follow
-```
-
-## Development Guide
-
-### Directory Structure
-
-```
-├── bin/                # CDK application entry point
-├── lib/                # CDK stack definition
-├── lambda/             # Lambda function code
-│   ├── upload.py       # Handles file upload URLs
-│   ├── download.py     # Handles file download URLs
-│   ├── training_api.py # Handles training job creation
-│   └── audio.py        # Handles WebSocket audio streaming
-├── test/               # Unit and integration tests
-└── test_websocket.py   # WebSocket test script
-```
-
-### Adding New Features
-
-1. Modify Lambda functions in the `lambda/` directory
-2. Update infrastructure in `lib/test-training-stack.ts`
-3. Run `npm run build` to compile TypeScript
-4. Deploy with `cdk deploy`
-
-### Local Testing
-
-For local Lambda testing:
-
-```bash
-# Install AWS SAM CLI
-pip install aws-sam-cli
-
-# Invoke a Lambda function locally
-sam local invoke UploadHandler -e events/upload-event.json
-```
-
-## Common Commands
-
-* `npm run build`   - Compile TypeScript to JavaScript
-* `npm run watch`   - Watch for changes and compile
-* `npm run test`    - Run the Jest unit tests
-* `npx cdk deploy`  - Deploy the stack to your AWS account/region
-* `npx cdk diff`    - Compare the deployed stack with current state
-* `npx cdk synth`   - Output the synthesized CloudFormation template
-* `npm run wscat`   - Connect to the WebSocket endpoint
+4. **Training Jobs Failing**: Review SageMaker logs for training jobs. Common issues include:
+   - Invalid training data format
+   - Container image issues
+   - Resource constraints

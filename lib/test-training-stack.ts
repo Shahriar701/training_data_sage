@@ -86,7 +86,8 @@ export class TestTrainingStack extends cdk.Stack {
       handler: 'download.handler',
       environment: {
         WEIGHTS_BUCKET: weightsBucket.bucketName,
-        MODEL_REGISTRY: modelRegistry.repositoryUri
+        MODEL_REGISTRY: modelRegistry.repositoryUri,
+        TRAINING_BUCKET: trainingDataBucket.bucketName
       },
       timeout: cdk.Duration.seconds(60),
       memorySize: 512,
@@ -130,7 +131,10 @@ export class TestTrainingStack extends cdk.Stack {
       }),
       handler: 'training.handler',
       environment: {
-        TRAINING_CONFIG: JSON.stringify(trainingJobConfig)
+        TRAINING_CONFIG: JSON.stringify(trainingJobConfig),
+        SAGEMAKER_ROLE_ARN: sagemakerRole.roleArn,
+        TRAINING_BUCKET: trainingDataBucket.bucketName,
+        WEIGHTS_BUCKET: weightsBucket.bucketName
       },
       timeout: cdk.Duration.minutes(10),
       memorySize: 512,
