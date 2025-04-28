@@ -251,3 +251,63 @@ aws s3 ls s3://<your-training-bucket>/audio/
    - Invalid training data format
    - Container image issues
    - Resource constraints
+
+## CDK Commands
+
+### Setup and Deployment
+
+```bash
+# Install CDK dependencies
+npm install
+
+# Bootstrap CDK in your AWS account (first time only)
+npx cdk bootstrap
+
+# Synthesize CloudFormation template
+npx cdk synth
+
+# Deploy the stack
+npx cdk deploy
+
+# Deploy with approval for security-related IAM changes
+npx cdk deploy --require-approval never
+```
+
+### Stack Management
+
+```bash
+# List all stacks in the app
+npx cdk ls
+
+# Get information about stack
+npx cdk metadata
+
+# Get stack drift information
+npx cdk doctor
+```
+
+### Update and Delete
+
+```bash
+# Update existing stack deployment
+npx cdk deploy
+
+# Destroy stack and all resources
+npx cdk destroy
+
+# Destroy without confirmation prompt
+npx cdk destroy --force
+```
+
+### Testing and Development
+
+```bash
+# Run CDK unit tests
+npm test
+
+# Watch for changes and auto-synth
+npx cdk watch
+
+# Compare deployed stack with current state
+npx cdk diff
+```
